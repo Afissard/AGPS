@@ -1,0 +1,4 @@
+# .gitignore for unreal plugins
+Binaries/
+Intermediate/
+Saved/
