@@ -3,12 +3,25 @@
 
 #include "Algorithms/Tricoloration/GPATricoloration.h"
 
+/**
+ * @brief Retrieve the map's corners based of the navmesh's triangulation.
+ *
+ * To understand this method, we need to understand the structure of a recast navmesh which is the following :
+ * 
+ * Tiles -> Polygons -> Triangles -> Vertices
+ * 
+ * First part : Loop to retrieve each vertex.
+ * Second part : Retrieve a unique instance of each vertex.
+ * Third part : Sets each vertices neighbors in sort that they are triangulated.
+ * @return No return but sets Vertices, an array of Coloration vertices that represents the maps corners. 
+ */
 void UGPATricoloration::ComputeVertices()
 {
 	TArray<FNavTileRef> Tiles;
 	TArray<FNavPoly> Polys;
 	TArray<FVector> TilesLocations;
 
+	// First Part :
 	NavMesh->GetAllNavMeshTiles(Tiles);
 	for (int i = 0; i < Tiles.Num(); i++)
 	{
@@ -19,6 +32,8 @@ void UGPATricoloration::ComputeVertices()
 			TArray<FColorationVertice> PolygonVertices;
 			for (int k = 0; k < TilesLocations.Num(); k++)
 			{
+				
+				// Second Part :
 				bool bIsRegistered = false;
 				for (int l = 0; l < Vertices.Num(); l++)
 				{
@@ -38,14 +53,26 @@ void UGPATricoloration::ComputeVertices()
 				}
 				UE_LOG(LogTemp, Warning, TEXT("Vertice : %f, %f, %f"), TilesLocations[k].X, TilesLocations[k].Y, TilesLocations[k].Z)
 			}
+			
+			// Third Part :
 			for (int l = 0; l < PolygonVertices.Num(); l++)
 			{
 				for (int m = 0; m < PolygonVertices.Num(); m++)
 				{
 					if (PolygonVertices[l].Id != PolygonVertices[m].Id )
 					{
-						if ((l == 1 && m == 3) || (l == 3 && m == 1) ) {} // C'est pas beau mais ça permet d'enlever les connections qui ne font pas partie de celle des triangles (jusqu'à preuve du contraire)
-						else if (!PolygonVertices[l].Links.Contains(PolygonVertices[m].Id))
+						if (l==0 || m == 0) // permet de trianguler sous la forme d'un eventail
+						{
+							for (int n = 0; n < Vertices.Num(); n++)
+							{
+								if (Vertices[n].Id == PolygonVertices[l].Id)
+								{
+									Vertices[n].Links.Add(PolygonVertices[m].Id);
+									break;
+								}
+							}
+						}
+						else if ( l - m == 1 || l - m == -1 )
 						{
 							for (int n = 0; n < Vertices.Num(); n++)
 							{
@@ -63,6 +90,14 @@ void UGPATricoloration::ComputeVertices()
 	}
 }
 
+/**
+ * Return a specific coloration vertices of the navmesh based on its index.
+ * If no element correspond to the selected index, return a nullptr.
+ * 
+ * @param Id Index of the wanted vertices.
+ * 
+ * @return A FColorationVertice that represents a vertices of the navmesh that is aware of its neighbors.
+ */
 FColorationVertice* UGPATricoloration::FindById(int32 Id)
 {
 	for (FColorationVertice& Element : Vertices)

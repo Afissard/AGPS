@@ -11,6 +11,8 @@
 #include "Widgets/Input/SButton.h"
 #include "Modules/ModuleManager.h"
 #include "ClassViewerModule.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
 #include "Widgets/Text/STextBlock.h"
 
 /**
@@ -136,7 +138,7 @@ void SAGPSPanel::Construct(const FArguments& InArgs)
                 // Lambda: show the currently selected algorithm name or prompt text.
                 .Text_Lambda([this]()
                 {
-                    return SelectedAlgo.IsValid()? FText::FromString(SelectedAlgo->GetName()): FText::FromString("Select Algorithm");
+                    return SelectedAlgo.IsValid()? FText::FromString(SelectedAlgo->GetName()): FText::FromString("None");
                 })
             ]
         ]
@@ -166,14 +168,12 @@ void SAGPSPanel::Construct(const FArguments& InArgs)
                 .CreateClassViewer(
                    []()->FClassViewerInitializationOptions
                     {
-                        FClassViewerInitializationOptions Options;
-                        Options.Mode = EClassViewerMode::ClassPicker;
-                        Options.DisplayMode = EClassViewerDisplayMode::ListView;
-                        Options.bShowNoneOption = true;
-                        // Only allow classes that are children of AActor
-                        //Options.AllowedChildrenOfClasses.Add(AActor::StaticClass());
-                        // (optionnel) empêcher les classes abstraites : ClassViewer gère ça côté UI
-                        return Options;
+                       FClassViewerInitializationOptions Options;
+                       Options.Mode = EClassViewerMode::ClassPicker;
+                       Options.DisplayMode = EClassViewerDisplayMode::ListView;
+                       Options.bShowNoneOption = true;
+                       Options.bIsActorsOnly = true; // Only allow classes that are children of AActor
+                       return Options;
                     }(),
                     FOnClassPicked::CreateSP(this, &SAGPSPanel::OnGuardClassPicked)
                 )
@@ -191,8 +191,29 @@ void SAGPSPanel::Construct(const FArguments& InArgs)
             // call debug/preview helpers to visualize in the editor.
             .OnClicked_Lambda([this]()
             {
-                if (SelectedAlgo.IsValid() && SelectedNavMeshEntry.IsValid())
+                if (!SelectedNavMeshEntry.IsValid() || !SelectedNavMeshEntry->NavMesh.IsValid())
                 {
+                    FNotificationInfo Info(FText::FromString("Please select a NavMesh before previewing."));
+                    Info.ExpireDuration = 5.0f;
+                    Info.bUseSuccessFailIcons = true;
+                    TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+                    if (Notification.IsValid())
+                    {
+                        Notification->SetCompletionState(SNotificationItem::CS_Fail);
+                    }
+                    return FReply::Handled();
+                } else if(!SelectedAlgo.IsValid())
+                {
+                    FNotificationInfo Info(FText::FromString("Please select an algorithm before previewing."));
+                    Info.ExpireDuration = 5.0f;
+                    Info.bUseSuccessFailIcons = true;
+                    TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+                    if (Notification.IsValid())
+                    {
+                        Notification->SetCompletionState(SNotificationItem::CS_Fail);
+                    }
+                    return FReply::Handled();
+                } else {
                     UClass* AlgoClass = SelectedAlgo.Get();
                     // Create algorithm instance non-transactionally in transient package
                     UGuardPlacementAlgoBase* Algo = NewObject<UGuardPlacementAlgoBase>(GetTransientPackage(), AlgoClass);
@@ -201,9 +222,28 @@ void SAGPSPanel::Construct(const FArguments& InArgs)
                     {
                         // Compute spawn settings from selected navmesh and preview them
                         GuardSpawnSettingsComputed = Algo->ComputeGuardLocations(SelectedNavMeshEntry->NavMesh.Get());
+                        if (GuardSpawnSettingsComputed.Num() <= 0)
+                        {
+                            FNotificationInfo Info(FText::FromString("Failed to compute guard locations"));
+                            Info.ExpireDuration = 5.0f;
+                            Info.bUseSuccessFailIcons = true;
+                            TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+                            if (Notification.IsValid())
+                            {
+                                Notification->SetCompletionState(SNotificationItem::CS_Fail);
+                            }
+                            return FReply::Handled();
+                        }
                         Algo->DebugView();
                         Algo->PreviewGuardAtLocation(GetEditorWorld(), &GuardSpawnSettingsComputed);
-                        
+                        FNotificationInfo Info(FText::FromString("Preview guard locations have been placed in the editor"));
+                        Info.ExpireDuration = 5.0f;
+                        Info.bUseSuccessFailIcons = true;
+                        TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+                        if (Notification.IsValid())
+                        {
+                            Notification->SetCompletionState(SNotificationItem::CS_Success);
+                        }
                     }
                 }
                 return FReply::Handled();
@@ -221,8 +261,40 @@ void SAGPSPanel::Construct(const FArguments& InArgs)
             // then call PlaceGuardAtLocation to spawn actors in the editor world.
             .OnClicked_Lambda([this]()
             {
-                if (SelectedAlgo.IsValid() && SelectedNavMeshEntry.IsValid())
+                if (!SelectedNavMeshEntry.IsValid() || !SelectedNavMeshEntry->NavMesh.IsValid())
                 {
+                    FNotificationInfo Info(FText::FromString("Please select a NavMesh before previewing."));
+                    Info.ExpireDuration = 5.0f;
+                    Info.bUseSuccessFailIcons = true;
+                    TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+                    if (Notification.IsValid())
+                    {
+                        Notification->SetCompletionState(SNotificationItem::CS_Fail);
+                    }
+                    return FReply::Handled();
+                } else if(!SelectedAlgo.IsValid())
+                {
+                    FNotificationInfo Info(FText::FromString("Please select an algorithm before previewing."));
+                    Info.ExpireDuration = 5.0f;
+                    Info.bUseSuccessFailIcons = true;
+                    TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+                    if (Notification.IsValid())
+                    {
+                        Notification->SetCompletionState(SNotificationItem::CS_Fail);
+                    }
+                    return FReply::Handled();
+                } else if (!SelectedGuardActorClass || !SelectedGuardActorClass->IsChildOf(AActor::StaticClass()))
+                {
+                    FNotificationInfo Info(FText::FromString("Please select a valid actor class."));
+                    Info.ExpireDuration = 5.0f;
+                    Info.bUseSuccessFailIcons = true;
+                    TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+                    if (Notification.IsValid())
+                    {
+                        Notification->SetCompletionState(SNotificationItem::CS_Fail);
+                    }
+                    return FReply::Handled();
+                } else {
                     UClass* AlgoClass = SelectedAlgo.Get();
 
                     UGuardPlacementAlgoBase* Algo = NewObject<UGuardPlacementAlgoBase>(GetTransientPackage(), AlgoClass);
@@ -234,7 +306,28 @@ void SAGPSPanel::Construct(const FArguments& InArgs)
                             GuardSpawnSettingsComputed = Algo->ComputeGuardLocations(SelectedNavMeshEntry->NavMesh.Get());
                         }
                         
+                        if (GuardSpawnSettingsComputed.Num() <= 0)
+                        {
+                            FNotificationInfo Info(FText::FromString("Failed to compute guard locations"));
+                            Info.ExpireDuration = 5.0f;
+                            Info.bUseSuccessFailIcons = true;
+                            TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+                            if (Notification.IsValid())
+                            {
+                                Notification->SetCompletionState(SNotificationItem::CS_Fail);
+                            }
+                            return FReply::Handled();
+                        }
+                        
                         Algo->PlaceGuardAtLocation(GetEditorWorld(), &GuardSpawnSettingsComputed, SelectedGuardActorClass);
+                        FNotificationInfo Info(FText::FromString("Guard have been placed in the editor"));
+                        Info.ExpireDuration = 5.0f;
+                        Info.bUseSuccessFailIcons = true;
+                        TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+                        if (Notification.IsValid())
+                        {
+                            Notification->SetCompletionState(SNotificationItem::CS_Success);
+                        }
                     }
                 }
                 return FReply::Handled();
