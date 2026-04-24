@@ -88,7 +88,7 @@ Then add the following depending on your needs :
 The final render shall resemble the following : 
 ![AGPS Screenshot](Resources/RecastNavmeshVis.png)
 
-#### Navmesh triangulation configuaration
+#### Navmesh triangulation configuration
 This section will show the way we have parameterized the recast navmesh in order to achieve a clean room triangulation.
 
 1. Get your custom recast navmesh with an agent radius at 0.
