@@ -59,7 +59,7 @@ TArray<FGuardSpawnSetting> UGuardPlacementAlgoBase::ComputeGuardLocations(ARecas
  *  - Emits log messages describing what is being previewed.
  *  - Draws persistent debug primitives (spheres and lines) in the provided world.
  */
-void UGuardPlacementAlgoBase::PreviewGuardAtLocation(UWorld* EditorWorld, TArray<FGuardSpawnSetting>* GuardList)
+void UGuardPlacementAlgoBase::PreviewGuardAtLocation(UWorld* EditorWorld, TArray<FGuardSpawnSetting>* GuardList,FGuardSettings GuardSettings)
 {
 	if (!EditorWorld)
 	{
@@ -76,7 +76,7 @@ void UGuardPlacementAlgoBase::PreviewGuardAtLocation(UWorld* EditorWorld, TArray
 	UE_LOG(LogGuardPlacementAlgo, Log, TEXT("Previewing %d guard locations"), GuardList->Num());
 	for (int i = 0; i < GuardList->Num(); ++i)
 	{
-		const auto& [SpawnLocation, SpawnRotation] = (*GuardList)[i];
+		const auto& [SpawnLocation, SpawnRotation, GuardSettings] = (*GuardList)[i];
 		UE_LOG(LogGuardPlacementAlgo, Log, TEXT("Previewing guard at location %s and rotation %s"), *SpawnLocation.ToString(), *SpawnRotation.ToString())
 		
 		// Draw a orange sphere at the guard location
@@ -104,6 +104,18 @@ void UGuardPlacementAlgoBase::PreviewGuardAtLocation(UWorld* EditorWorld, TArray
 			0,				// depth priority
 			2.0f			// thickness
 		);
+		
+		// Cone of view of the guard
+		const FVector ForwardVector = SpawnRotation.Vector();
+		FVector RightVector = FRotationMatrix(SpawnRotation).GetScaledAxis(EAxis::Y);
+
+		const float HalfFOV = GuardSettings.FOV / 2.0f;
+		const FVector LeftBoundary = ForwardVector.RotateAngleAxis(-HalfFOV, FVector::UpVector) * GuardSettings.ViewRange;
+		const FVector RightBoundary = ForwardVector.RotateAngleAxis(HalfFOV, FVector::UpVector) * GuardSettings.ViewRange;
+		DrawDebugLine(EditorWorld, SpawnLocation, SpawnLocation + LeftBoundary, FColor::Green, true, -1.0f, 0, 2.0f);
+		DrawDebugLine(EditorWorld, SpawnLocation, SpawnLocation + RightBoundary, FColor::Green, true, -1.0f, 0, 2.0f);
+		// TODO: Draw a true 3D Cone
+		// TODO: use the same debug function as the AutoGuardComponent
 	}
 }
 
@@ -158,7 +170,7 @@ void UGuardPlacementAlgoBase::PlaceGuardAtLocation(UWorld* EditorWorld, TArray<F
 	
 	for (int i = 0; i < GuardList->Num(); ++i)
 	{
-		const auto& [SpawnLocation, SpawnRotation] = (*GuardList)[i];
+		const auto& [SpawnLocation, SpawnRotation, GuardSettings] = (*GuardList)[i];
 		UE_LOG(LogGuardPlacementAlgo, Log, TEXT("Spawning guard at location %s and rotation %s"), *SpawnLocation.ToString(), *SpawnRotation.ToString());
 
 		if (!*GuardClass)
@@ -182,6 +194,11 @@ void UGuardPlacementAlgoBase::PlaceGuardAtLocation(UWorld* EditorWorld, TArray<F
 		{
 			UE_LOG(LogGuardPlacementAlgo, Error, TEXT("Failed to spawn guard actor"));
 			continue;
+		}
+		// if the actor implement AutoGuardComponent, call the init function
+		if (UAutoGuardComponent* AutoGuardComp = NewActor->FindComponentByClass<UAutoGuardComponent>())
+		{
+			AutoGuardComp->Init(&GuardSettings);
 		}
 
 		// Rendre l'acteur transactionnel (undo/redo)

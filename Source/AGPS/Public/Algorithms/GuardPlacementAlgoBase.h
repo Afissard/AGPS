@@ -4,6 +4,7 @@
 
 #include "NavMesh/RecastNavMesh.h"
 #include "CoreMinimal.h"
+#include "Guard/AutoGuardComponent.h"
 #include "UObject/Object.h"
 #include "GuardPlacementAlgoBase.generated.h"
 
@@ -27,7 +28,8 @@ struct FGuardSpawnSetting
 	// Orientation to apply to the spawned guard actor.
     FRotator SpawnRotation;
 	
-	// TODO LATER: add other settings like guard path, vision, etc
+	// Guard settings
+	FGuardSettings GuardSettings;
 };
 
 /**
@@ -93,7 +95,7 @@ public:
 	 * @param EditorWorld The editor UWorld used for preview (may be nullptr).
 	 * @param GuardList Pointer to the list of computed spawn settings to preview.
 	 */
-	void PreviewGuardAtLocation(UWorld* EditorWorld, TArray<FGuardSpawnSetting>* GuardList);
+	void PreviewGuardAtLocation(UWorld* EditorWorld, TArray<FGuardSpawnSetting>* GuardList,FGuardSettings GuardSettings);
 	
 	/**
 	 * @brief Place actual guard actors in the editor world at the provided locations.

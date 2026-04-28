@@ -12,8 +12,12 @@
 #include "Modules/ModuleManager.h"
 #include "ClassViewerModule.h"
 #include "Framework/Notifications/NotificationManager.h"
+#include "Guard/AutoGuardComponent.h"
+#include "Widgets/Input/SNumericEntryBox.h"
+#include "Widgets/Layout/SWidgetSwitcher.h"
 #include "Widgets/Notifications/SNotificationList.h"
 #include "Widgets/Text/STextBlock.h"
+#include "Widgets/Layout/SWidgetSwitcher.h"
 
 /**
  * @brief Slate Construct implementation for the SAGPSPanel.
@@ -38,159 +42,272 @@ void SAGPSPanel::Construct(const FArguments& InArgs)
     [
         SNew(SVerticalBox)
 
-        // Navmesh selector
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(4)
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString("Select NavMesh"))
-        ]
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(4)
-        [
-            SNew(SComboBox<TSharedPtr<FAGPSNavMeshEntry>>)
-            .OptionsSource(&NavMeshEntries)
-            // Lambda: generate a widget for each navmesh entry (simple text block with Entry->Name).
-            .OnGenerateWidget_Lambda([](TSharedPtr<FAGPSNavMeshEntry> Entry)
-            {
-                return SNew(STextBlock).Text(FText::FromString(Entry->Name));
-            })
-            // Lambda: store the newly selected navmesh entry.
-            .OnSelectionChanged_Lambda(
-                [this](TSharedPtr<FAGPSNavMeshEntry> NewSelection, ESelectInfo::Type)
-                {
-                    SelectedNavMeshEntry = NewSelection;
-                })
-            .Content()
-            [
-                SNew(STextBlock)
-                // Lambda: display current selection name or "None".
-                .Text_Lambda([this]()
-                {
-                    return SelectedNavMeshEntry.IsValid()? FText::FromString(SelectedNavMeshEntry->Name): FText::FromString("None");
-                })
-            ]
-        ]
-        
-        // Refresh the navmesh selection
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(4)
+        // Top buttons to switch views
+    + SVerticalBox::Slot()
+    .AutoHeight()
+    .Padding(4)
+    [
+        SNew(SHorizontalBox)
+
+        + SHorizontalBox::Slot()
+        .AutoWidth()
+        .Padding(2)
         [
             SNew(SButton)
-            .Text(FText::FromString("Refresh NavMeshes"))
+            .Text(FText::FromString("Guard Settings"))
             .OnClicked_Lambda([this]()
             {
-                RefreshNavMeshes();
+                if (ViewSwitcher.IsValid())
+                {
+                    ViewSwitcher->SetActiveWidgetIndex(0);
+                }
                 return FReply::Handled();
             })
         ]
-        
-        /*
-        // Selected NavMesh info
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(4)
-        [
-            SNew(STextBlock)
-            .Text_Lambda([this]()
-            {                
-                if (SelectedNavMeshEntry.IsValid() && SelectedNavMeshEntry->NavMesh.IsValid())
-                {
-                    return GetSelectedNavMeshText();
-                }
-                return FText::FromString("Selected NavMesh: None");
-            })
-        ]
-        */
 
-        // Algorithm selector
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(4)
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString("Select an algorithm"))
-        ]
-        
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(4)
-        [
-            SAssignNew(AlgoComboBox, SComboBox<TSharedPtr<UClass>>)
-            .OptionsSource(&AlgoEntries)
-            // Lambda: show the class name for each algorithm entry (or "Invalid").
-            .OnGenerateWidget_Lambda([](TSharedPtr<UClass> InItem)
-            {
-                return SNew(STextBlock).Text(InItem.IsValid()? FText::FromString(InItem->GetName()): FText::FromString("Invalid"));
-            })
-            // Lambda: store the chosen algorithm class into SelectedAlgo.
-            .OnSelectionChanged_Lambda([this](TSharedPtr<UClass> NewSelection, ESelectInfo::Type)
-            {
-                SelectedAlgo = NewSelection;
-            })
-
-            .Content()
-            [
-                SNew(STextBlock)
-                // Lambda: show the currently selected algorithm name or prompt text.
-                .Text_Lambda([this]()
-                {
-                    return SelectedAlgo.IsValid()? FText::FromString(SelectedAlgo->GetName()): FText::FromString("None");
-                })
-            ]
-        ]
-
-        // Guard actor class selector
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(4)
-        [
-            SNew(STextBlock)
-            .Text(FText::FromString("Select a Guard class"))
-        ]
-
-        // Build a Class Viewer, configured in ClassPicker mode, listing classes.
-        // The FOnClassPicked callback binds to our OnGuardClassPicked method.
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(4)
-        [
-            // We create the class viewer widget inline below.
-            // Build options:
-            SNew(SBox)
-            .MaxDesiredHeight(300)
-            [
-                // Create the Class Viewer widget instance
-                FModuleManager::Get().LoadModuleChecked<FClassViewerModule>("ClassViewer")
-                .CreateClassViewer(
-                   []()->FClassViewerInitializationOptions
-                    {
-                       FClassViewerInitializationOptions Options;
-                       Options.Mode = EClassViewerMode::ClassPicker;
-                       Options.DisplayMode = EClassViewerDisplayMode::ListView;
-                       Options.bShowNoneOption = true;
-                       Options.bIsActorsOnly = true; // Only allow classes that are children of AActor
-                       return Options;
-                    }(),
-                    FOnClassPicked::CreateSP(this, &SAGPSPanel::OnGuardClassPicked)
-                )
-            ]
-        ]
-        
-        // Guard placement preview button
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(4)
+        + SHorizontalBox::Slot()
+        .AutoWidth()
+        .Padding(2)
         [
             SNew(SButton)
-            .Text(FText::FromString("Preview guards placement"))
-            // On click: instantiate the selected algorithm, compute guard spawn settings,
-            // call debug/preview helpers to visualize in the editor.
+            .Text(FText::FromString("Guard Placement"))
             .OnClicked_Lambda([this]()
             {
+                if (ViewSwitcher.IsValid())
+                {
+                    ViewSwitcher->SetActiveWidgetIndex(1);
+                }
+                return FReply::Handled();
+            })
+        ]
+    ]
+
+        // The view switcher: index 0 = settings, index 1 = placement
+    + SVerticalBox::Slot()
+    .FillHeight(1)
+    .Padding(4)
+    [
+        SAssignNew(ViewSwitcher, SWidgetSwitcher)
+
+        // ---- Page 0 : Guard Settings ----
+        + SWidgetSwitcher::Slot()
+        [
+            SNew(SVerticalBox)
+
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(4)
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString("Guard Settings"))
+            ]
+
+            // FOV row
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(4)
+            [
+                SNew(SHorizontalBox)
+
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(2)
+                [
+                    SNew(STextBlock)
+                    .Text(FText::FromString("FOV"))
+                ]
+
+                + SHorizontalBox::Slot()
+                .FillWidth(1)
+                .Padding(2)
+                [
+                    SNew(SNumericEntryBox<float>)
+                    .Value_Lambda([this]() -> TOptional<float>
+                    {
+                        return TOptional<float>(GuardSettings.FOV);
+                    })
+                    .OnValueChanged_Lambda([this](float NewValue)
+                    {
+                        GuardSettings.FOV = NewValue;
+                    })
+                    .MinValue(0.0f)
+                    .MaxValue(360.0f)
+                    .AllowSpin(false)
+                    .ToolTipText(FText::FromString("Field of view in degrees"))
+                ]
+            ]
+
+            // ViewRange row
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(4)
+            [
+                SNew(SHorizontalBox)
+
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(2)
+                [
+                    SNew(STextBlock)
+                    .Text(FText::FromString("View Range"))
+                ]
+
+                + SHorizontalBox::Slot()
+                .FillWidth(1)
+                .Padding(2)
+                [
+                    SNew(SNumericEntryBox<float>)
+                    .Value_Lambda([this]() -> TOptional<float>
+                    {
+                        return TOptional<float>(GuardSettings.ViewRange);
+                    })
+                    .OnValueChanged_Lambda([this](float NewValue)
+                    {
+                        GuardSettings.ViewRange = NewValue;
+                    })
+                    .MinValue(0.0f)
+                    .MaxValue(10000.0f)
+                    .AllowSpin(false)
+                    .ToolTipText(FText::FromString("Maximum view distance"))
+                ]
+            ]
+        ]
+        // ---- Page 1 : Guard Placement ----
+        + SWidgetSwitcher::Slot()
+        [
+            // Place here the existing Placement UI: NavMesh selector, Algo selector,
+            // ClassViewer and Preview/Place buttons.
+            // You can copy/paste the corresponding blocks from your former Construct
+            // (everything between the NavMesh selector comment and the final Place button).
+            SNew(SVerticalBox)
+
+            // Navmesh selector
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(4)
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString("Select NavMesh"))
+            ]
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(4)
+            [
+                SAssignNew(NavMeshComboBox, SComboBox<TSharedPtr<FAGPSNavMeshEntry>>)
+                .OptionsSource(&NavMeshEntries)
+                .OnGenerateWidget_Lambda([](TSharedPtr<FAGPSNavMeshEntry> Entry)
+                {
+                    return SNew(STextBlock).Text(FText::FromString(Entry->Name));
+                })
+                .OnSelectionChanged_Lambda([this](TSharedPtr<FAGPSNavMeshEntry> NewSelection, ESelectInfo::Type)
+                {
+                    SelectedNavMeshEntry = NewSelection;
+                })
+                .Content()
+                [
+                    SNew(STextBlock)
+                    .Text_Lambda([this]()
+                    {
+                        return SelectedNavMeshEntry.IsValid()? FText::FromString(SelectedNavMeshEntry->Name): FText::FromString("None");
+                    })
+                ]
+            ]
+
+            // Refresh navmesh button
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(4)
+            [
+                SNew(SButton)
+                .Text(FText::FromString("Refresh NavMeshes"))
+                .OnClicked_Lambda([this]()
+                {
+                    RefreshNavMeshes();
+                    return FReply::Handled();
+                })
+            ]
+
+            // Algorithm selector (same as before)
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(4)
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString("Select an algorithm"))
+            ]
+
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(4)
+            [
+                SAssignNew(AlgoComboBox, SComboBox<TSharedPtr<UClass>>)
+                .OptionsSource(&AlgoEntries)
+                .OnGenerateWidget_Lambda([](TSharedPtr<UClass> InItem)
+                {
+                    return SNew(STextBlock).Text(InItem.IsValid()? FText::FromString(InItem->GetName()): FText::FromString("Invalid"));
+                })
+                .OnSelectionChanged_Lambda([this](TSharedPtr<UClass> NewSelection, ESelectInfo::Type)
+                {
+                    SelectedAlgo = NewSelection;
+                })
+                .Content()
+                [
+                    SNew(STextBlock)
+                    .Text_Lambda([this]()
+                    {
+                        return SelectedAlgo.IsValid()? FText::FromString(SelectedAlgo->GetName()): FText::FromString("None");
+                    })
+                ]
+            ]
+
+            // Guard actor class selector header
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(4)
+            [
+                SNew(STextBlock)
+                .Text(FText::FromString("Select a Guard class"))
+            ]
+
+            // Class Viewer (same as before)
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(4)
+            [
+                SNew(SBox)
+                .MaxDesiredHeight(300)
+                [
+                    FModuleManager::Get().LoadModuleChecked<FClassViewerModule>("ClassViewer")
+                    .CreateClassViewer(
+                       []()->FClassViewerInitializationOptions
+                        {
+                           FClassViewerInitializationOptions Options;
+                           Options.Mode = EClassViewerMode::ClassPicker;
+                           Options.DisplayMode = EClassViewerDisplayMode::ListView;
+                           Options.bShowNoneOption = true;
+                           Options.bIsActorsOnly = true;
+                           return Options;
+                        }(),
+                        FOnClassPicked::CreateSP(this, &SAGPSPanel::OnGuardClassPicked)
+                    )
+                ]
+            ]
+
+            // Preview and Place buttons (copy your existing lambdas wholesale)
+            // - Preview button
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(4)
+            [
+                SNew(SButton)
+                .Text(FText::FromString("Preview guards placement"))
+                .OnClicked_Lambda([this]()
+                {
+                    // Check if the Guard class have the component AutoGuardComponent
+                
+                
                 if (!SelectedNavMeshEntry.IsValid() || !SelectedNavMeshEntry->NavMesh.IsValid())
                 {
                     FNotificationInfo Info(FText::FromString("Please select a NavMesh before previewing."));
@@ -202,7 +319,9 @@ void SAGPSPanel::Construct(const FArguments& InArgs)
                         Notification->SetCompletionState(SNotificationItem::CS_Fail);
                     }
                     return FReply::Handled();
-                } else if(!SelectedAlgo.IsValid())
+                } 
+                
+                if(!SelectedAlgo.IsValid())
                 {
                     FNotificationInfo Info(FText::FromString("Please select an algorithm before previewing."));
                     Info.ExpireDuration = 5.0f;
@@ -213,30 +332,73 @@ void SAGPSPanel::Construct(const FArguments& InArgs)
                         Notification->SetCompletionState(SNotificationItem::CS_Fail);
                     }
                     return FReply::Handled();
-                } else {
-                    UClass* AlgoClass = SelectedAlgo.Get();
-                    // Create algorithm instance non-transactionally in transient package
-                    UGuardPlacementAlgoBase* Algo = NewObject<UGuardPlacementAlgoBase>(GetTransientPackage(), AlgoClass);
-
-                    if (Algo)
+                }
+                
+                if (SelectedGuardActorClass)
+                {
+                    AActor* DefaultActor = Cast<AActor>(SelectedGuardActorClass->GetDefaultObject());
+                    if (!DefaultActor || !DefaultActor->FindComponentByClass<UAutoGuardComponent>())
                     {
-                        // Compute spawn settings from selected navmesh and preview them
-                        GuardSpawnSettingsComputed = Algo->ComputeGuardLocations(SelectedNavMeshEntry->NavMesh.Get());
-                        if (GuardSpawnSettingsComputed.Num() <= 0)
+                        FNotificationInfo Info(FText::FromString("Selected Guard class does not contain AutoGuardComponent."));
+                        Info.ExpireDuration = 5.0f;
+                        Info.bUseSuccessFailIcons = true;
+                        TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+                        if (Notification.IsValid())
                         {
-                            FNotificationInfo Info(FText::FromString("Failed to compute guard locations"));
-                            Info.ExpireDuration = 5.0f;
-                            Info.bUseSuccessFailIcons = true;
-                            TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
-                            if (Notification.IsValid())
-                            {
-                                Notification->SetCompletionState(SNotificationItem::CS_Fail);
-                            }
-                            return FReply::Handled();
+                            Notification->SetCompletionState(SNotificationItem::CS_Fail);
                         }
-                        Algo->DebugView();
-                        Algo->PreviewGuardAtLocation(GetEditorWorld(), &GuardSpawnSettingsComputed);
-                        FNotificationInfo Info(FText::FromString("Preview guard locations have been placed in the editor"));
+                        return FReply::Handled();
+                    }
+                }
+                UClass* AlgoClass = SelectedAlgo.Get();
+                // Create algorithm instance non-transactionally in transient package
+                UGuardPlacementAlgoBase* Algo = NewObject<UGuardPlacementAlgoBase>(GetTransientPackage(), AlgoClass);
+
+                if (Algo)
+                {
+                    // Compute spawn settings from selected navmesh and preview them
+                    GuardSpawnSettingsComputed = Algo->ComputeGuardLocations(SelectedNavMeshEntry->NavMesh.Get());
+                    if (GuardSpawnSettingsComputed.Num() <= 0)
+                    {
+                        FNotificationInfo Info(FText::FromString("Failed to compute guard locations"));
+                        Info.ExpireDuration = 5.0f;
+                        Info.bUseSuccessFailIcons = true;
+                        TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+                        if (Notification.IsValid())
+                        {
+                            Notification->SetCompletionState(SNotificationItem::CS_Fail);
+                        }
+                        return FReply::Handled();
+                    }
+                    Algo->DebugView();
+                    Algo->PreviewGuardAtLocation(GetEditorWorld(), &GuardSpawnSettingsComputed, GuardSettings);
+                    FNotificationInfo Info(FText::FromString("Preview guard locations have been placed in the editor"));
+                    Info.ExpireDuration = 5.0f;
+                    Info.bUseSuccessFailIcons = true;
+                    TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+                    if (Notification.IsValid())
+                    {
+                        Notification->SetCompletionState(SNotificationItem::CS_Success);
+                    }
+                }
+                    return FReply::Handled();
+                })
+            ]
+
+            // - Clear preview button
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(4)
+            [
+                SNew(SButton)
+                .Text(FText::FromString("Clear preview"))
+                .OnClicked_Lambda([this]()
+                {
+                    if (UWorld* World = GetEditorWorld())
+                    {
+                        FlushPersistentDebugLines(World);
+
+                        FNotificationInfo Info(FText::FromString("Preview cleared"));
                         Info.ExpireDuration = 5.0f;
                         Info.bUseSuccessFailIcons = true;
                         TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
@@ -245,23 +407,20 @@ void SAGPSPanel::Construct(const FArguments& InArgs)
                             Notification->SetCompletionState(SNotificationItem::CS_Success);
                         }
                     }
-                }
-                return FReply::Handled();
-            })
-        ]
+                    return FReply::Handled();
+                })
+            ]
 
-        // Guard placement button
-        + SVerticalBox::Slot()
-        .AutoHeight()
-        .Padding(4)
-        [
-            SNew(SButton)
-            .Text(FText::FromString("Place guards in the level"))
-            // On click: instantiate the algorithm (if needed compute guard spawn settings),
-            // then call PlaceGuardAtLocation to spawn actors in the editor world.
-            .OnClicked_Lambda([this]()
-            {
-                if (!SelectedNavMeshEntry.IsValid() || !SelectedNavMeshEntry->NavMesh.IsValid())
+            // - Place button
+            + SVerticalBox::Slot()
+            .AutoHeight()
+            .Padding(4)
+            [
+                SNew(SButton)
+                .Text(FText::FromString("Place guards in the level"))
+                .OnClicked_Lambda([this]()
+                {
+                    if (!SelectedNavMeshEntry.IsValid() || !SelectedNavMeshEntry->NavMesh.IsValid())
                 {
                     FNotificationInfo Info(FText::FromString("Please select a NavMesh before previewing."));
                     Info.ExpireDuration = 5.0f;
@@ -294,6 +453,21 @@ void SAGPSPanel::Construct(const FArguments& InArgs)
                         Notification->SetCompletionState(SNotificationItem::CS_Fail);
                     }
                     return FReply::Handled();
+                } else if (SelectedGuardActorClass)
+                {
+                    AActor* DefaultActor = Cast<AActor>(SelectedGuardActorClass->GetDefaultObject());
+                    if (!DefaultActor || !DefaultActor->FindComponentByClass<UAutoGuardComponent>())
+                    {
+                        FNotificationInfo Info(FText::FromString("Selected Guard class does not contain AutoGuardComponent."));
+                        Info.ExpireDuration = 5.0f;
+                        Info.bUseSuccessFailIcons = true;
+                        TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
+                        if (Notification.IsValid())
+                        {
+                            Notification->SetCompletionState(SNotificationItem::CS_Fail);
+                        }
+                        return FReply::Handled();
+                    }
                 } else {
                     UClass* AlgoClass = SelectedAlgo.Get();
 
@@ -330,10 +504,12 @@ void SAGPSPanel::Construct(const FArguments& InArgs)
                         }
                     }
                 }
-                return FReply::Handled();
-            })
+                    return FReply::Handled();
+                })
+            ]
         ]
-    ];
+    ]
+];
 }
 
 /**

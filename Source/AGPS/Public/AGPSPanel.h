@@ -1,8 +1,10 @@
 ﻿#pragma once
 
 #include "Algorithms/GuardPlacementAlgoBase.h"
+#include "Guard/AutoGuardComponent.h"
 #include "Widgets/SCompoundWidget.h"
 #include "NavMesh/RecastNavMesh.h"
+#include "Widgets/Layout/SWidgetSwitcher.h"
 /**
  * @brief Entry representing a navmesh found in the editor world.
  *
@@ -32,6 +34,9 @@ public:
 	SLATE_BEGIN_ARGS(SAGPSPanel) {}
 	SLATE_END_ARGS()
 	
+	// Widget switcher for the top-level view (0 = Settings, 1 = Placement)
+	TSharedPtr<SWidgetSwitcher> ViewSwitcher;
+	
 	// All discovered navigation meshes in the current editor world (for the combo box).
     TArray<TSharedPtr<FAGPSNavMeshEntry>> NavMeshEntries;
     
@@ -52,6 +57,9 @@ public:
     
     // The actor class chosen to spawn as guards (set via the class picker).
     TSubclassOf<AActor> SelectedGuardActorClass;
+	
+	// Guard settings
+	FGuardSettings GuardSettings;
 
 private:
 	// Computed guard spawn settings produced by the selected algorithm (cached for preview/place).
