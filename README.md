@@ -100,3 +100,26 @@ This will allow the navmesh tile to start at the corner of your room instead of 
 
 -  **Max Simplification Error** is usually set to **default value**, but for some maps, it varies between 1.5 and 10. Most of the time its value is close to 2.
 -  **Cell Size** is also usually set to its **default value**, but sometimes, it is needed for it to have different values **depending on the room**.
+
+### Architecture of the vision system and wall coverage
+
+#### The perception component (Guard)
+
+The detection system relies on the native `UAIPerceptionComponent`, located in the guard’s controller.
+
+* **Visual configuration:** The `UAISenseConfig_Sight` object is attached to it. It contains parameters defining the guard’s visual profile, such as vision range, field of view angle, and age (visual memory).
+
+* **State update:** The `OnTargetPerceptionUpdated` function listens for stimulus events. When a wall is validly detected, it increments the `GuardSeen` variable to keep track of coverage.
+
+#### Strict visibility logic (Wall)
+
+To prevent the engine from validating the visibility of a wall simply by checking its geometric center, the `AGalleryWall` class implements the `IAISightTargetInterface`. This allows overriding the native `CanBeSeenFrom` function with custom logic.
+
+* **Spatial validation:** The function first uses a dot product to mathematically ensure that the wall is within the guard’s field of view.
+
+* **Obstacle checking:** The system then performs line traces toward two specific components, `LeftExtremity` and `RightExtremity` (previously positioned in the wall’s Blueprint). If no object blocks these lines of sight, the wall is considered fully visible.
+
+#### Known limitations and future improvements
+
+The current algorithm has a major logical flaw. It assumes that a wall is entirely visible if both of its extremities are visible, which is incorrect (a central obstacle could obscure the middle of the wall without blocking the extremities). This system could therefore be reworked.
+
