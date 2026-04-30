@@ -33,7 +33,8 @@ public class AGPS : ModuleRules
 				"EditorFramework",
 				"UnrealEd",
 				"NavigationSystem",
-				"AIModule"
+				"AIModule",
+				"GameplayTags"
 			}
 			);
 			
