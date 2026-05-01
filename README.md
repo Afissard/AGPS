@@ -123,3 +123,9 @@ To prevent the engine from validating the visibility of a wall simply by checkin
 
 The current algorithm has a major logical flaw. It assumes that a wall is entirely visible if both of its extremities are visible, which is incorrect (a central obstacle could obscure the middle of the wall without blocking the extremities). This system could therefore be reworked.
 
+## Guards settings *(work in progress)*
+A few things are still left as works in progress, notably a panel in the plugin to configure the guards used by the placement algorithm and spawning.
+![capture](./Resources/CapturePluginUsage_02.png)
+
+These settings are stored in the `FGuardSettings` struct, which is used by both `UAutoGuardComponent` and `UGuardPlacementAlgoBase`. However, the `AAGPSGuardAIController` class still needs to be modified to use them.
+
